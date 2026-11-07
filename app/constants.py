@@ -157,6 +157,8 @@ DEFAULT_SETTINGS = {
         "lantern_scheme": "",
         "lantern_spki": "",
         "lantern_hsts": False,
+        # Offer the plain .nsp/.xci of compressed .nsz/.xcz files (decompressed once in the background to hash them)
+        "lantern_variants": True,
         "discovery_enabled": False,
         "discovery_name": "AeroFoil",
         "discovery_http_port": 0,

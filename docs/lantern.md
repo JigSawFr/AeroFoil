@@ -86,3 +86,17 @@ find it without an address.
 - **Peers**: the server signs short-lived grants for its files with a key kept in `config/lantern-secrets.json`,
   the same after a restart, so other Lantern servers and devices can fetch from it. Declaring mirrors of a file
   is not offered yet.
+
+## Decompressed variants and differential updates
+
+A compressed package (`.nsz`, `.xcz`) is listed with `requires: ["fs-compression"]`. Beside it, a second app of the
+same game is offered as the plain `.nsp`/`.xci`, streamed decompressed on the fly with ranges, for consoles that
+cannot read compressed packages. To list a file with its SHA-256 before it is served, each compressed file is
+decompressed once in the background after the library is listed, and the result is kept in
+`config/lantern-variants.db` for the size and time of the file; a changed file loses its variant until it is
+hashed again. This costs CPU time on a large library: turn it off with **Offer decompressed NSP/XCI** in the
+settings.
+
+Files between 128 KiB and 64 MiB (updates, small packages) carry a chunk index, kept in `config/lantern-chunks/`,
+so a device that has an older version fetches only the pieces it lacks. Larger files have none: cutting them in
+Python is too slow.
