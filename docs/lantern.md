@@ -27,6 +27,11 @@ and DLC is one app that includes the others. Files are served in place, with ran
 `/v1/changes` says what really changed, also across a restart (`config/lantern-journal.db` and
 `config/lantern-announced.db`).
 
+Each game has its sheet from AeroFoil's titles database: name, description, categories as tags, and its age rating
+(read as the same age by Lantern, so a cap hides exactly what AeroFoil's would). Icons and banners AeroFoil has
+cached are served from here; the others point at the titles database's own addresses and are marked external,
+and screenshots are always external. One shelf, *Recently added*, is offered.
+
 ## Accounts and pairing
 
 A Lantern account is an AeroFoil user. A device shows a short code; the user opens `/lantern/pair` on AeroFoil,

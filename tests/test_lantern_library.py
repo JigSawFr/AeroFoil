@@ -3,6 +3,7 @@ import os
 import tempfile
 import unittest
 import uuid
+from unittest.mock import patch
 
 from flask import Flask
 
@@ -158,7 +159,72 @@ class LibraryTests(unittest.TestCase):
     def test_the_handshake_offers_the_library_and_changes(self):
         doc = self.get('/v1').get_json()
         self.assertEqual((doc['features']['library'], doc['features']['changes']), (1, 1))
-        self.assertEqual(doc['features']['titles'], 0)
+        self.assertEqual((doc['features']['titles'], doc['features']['sections']), (1, 1))
+
+    def info(self, **values):
+        base = {'name': 'Frost Valley', 'description': 'A cold adventure. ' * 30, 'category': 'Adventure, Puzzle',
+                'rating': 12, 'iconUrl': 'https://cdn.example.org/icon.jpg', 'bannerUrl': '',
+                'screenshots': ['https://cdn.example.org/1.jpg', 'http://insecure.example.org/2.jpg']}
+        base.update(values)
+        return patch('app.titles.get_game_info', return_value=base)
+
+    def test_a_title_has_its_sheet(self):
+        self.add('game.nsp', b'game')
+        with self.info():
+            self.refresh()
+        [title] = self.get('/v1/titles', query_string={'ids': TITLE}).get_json()['titles']
+        self.assertEqual((title['title_id'], title['name'], title['tags']), (TITLE, 'Frost Valley', ['Adventure', 'Puzzle']))
+        self.assertEqual(title['ratings'], [{'system': 'PEGI', 'rating': '12'}])
+        self.assertEqual(title['icon'], {'url': 'https://cdn.example.org/icon.jpg', 'external': True})
+        self.assertEqual([s['url'] for s in title['screenshots']], ['https://cdn.example.org/1.jpg'])
+        self.assertLessEqual(len(title['summary']), 300)
+
+    def test_a_rating_cap_hides_what_is_above_it(self):
+        self.add('game.nsp', b'game')
+        with self.info(rating=16):
+            self.refresh()
+        self.assertEqual(len(self.get('/v1/titles', query_string={'ids': TITLE}).get_json()['titles']), 1)
+        from lantern._generated.models import RatingCap
+
+        self.lantern.accounts.create_user('kid', ['library'])
+        token, _ = self.lantern.accounts.issue('kid', 'tablet', ['library'], rating_cap=RatingCap(age=12))
+        shown = self.get('/v1/titles', query_string={'ids': TITLE}, headers={'Authorization': f'Bearer {token}'}).get_json()['titles']
+        self.assertEqual(shown, [])
+
+    def test_a_cached_image_is_served_from_here(self):
+        self.add('game.nsp', b'game')
+        icons = os.path.join(self.dir.name, 'cache', 'icons')
+        os.makedirs(icons)
+        picture = b'\x89PNG\r\n\x1a\nnot really a picture'
+        with open(os.path.join(icons, TITLE + '.png'), 'wb') as handle:
+            handle.write(picture)
+        with self.info(), patch('app.lantern_native.library.CACHE_DIR', os.path.join(self.dir.name, 'cache')):
+            self.refresh()
+        [title] = self.get('/v1/titles', query_string={'ids': TITLE}).get_json()['titles']
+        sha = hashlib.sha256(picture).hexdigest()
+        self.assertEqual(title['icon']['sha256'], sha)
+        self.assertEqual(title['icon']['url'], f'{BASE}/v1/media/{sha}.png')
+        served = self.client.get(title['icon']['url'])
+        self.assertEqual((served.status_code, served.data, served.headers['Content-Type']), (200, picture, 'image/png'))
+
+    def test_title_changes_follow_the_sheet(self):
+        self.add('game.nsp', b'game')
+        with self.info():
+            self.refresh()
+        token = self.get('/v1/titles/changes').get_json()['since']
+        with self.info(name='Frost Valley II'):
+            self.refresh()
+        later = self.get('/v1/titles/changes', query_string={'since': token}).get_json()
+        self.assertEqual([t['name'] for t in later['titles']], ['Frost Valley II'])
+        with self.info():
+            self.refresh()
+            self.assertEqual(self.refresh(), (0, 0))
+
+    def test_recently_added_is_a_shelf(self):
+        self.add('a.nsp', b'aaa')
+        self.refresh()
+        [shelf] = self.get('/v1/sections').get_json()['sections']
+        self.assertEqual((shelf['id'], len(shelf['apps'])), ('recent', 1))
 
 
 if __name__ == '__main__':
