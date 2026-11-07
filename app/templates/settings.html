@@ -738,6 +738,18 @@
                                     <label class="form-check-label" for="lanternEnabledCheck">Lantern protocol</label>
                                 </div>
                                 <div class="form-text">Serve the open <a href="https://github.com/JigSawFr/lantern" target="_blank" rel="noopener noreferrer">Lantern</a> protocol at <code>/api/lantern</code> for Lantern clients. Takes effect after a restart.</div>
+                                <div class="form-check mt-2">
+                                    <input type="checkbox" class="form-check-input" id="lanternSchemeCheck">
+                                    <label class="form-check-label" for="lanternSchemeCheck">Behind an HTTPS reverse proxy</label>
+                                </div>
+                                <div class="form-text">Check this when a proxy ends TLS in front of AeroFoil: devices sign requests with the <code>https</code> address they use.</div>
+                                <div class="form-check mt-2">
+                                    <input type="checkbox" class="form-check-input" id="lanternHstsCheck">
+                                    <label class="form-check-label" for="lanternHstsCheck">Send HTTP Strict Transport Security</label>
+                                </div>
+                                <label for="lanternSpkiInput" class="form-label mt-2">Key fingerprint (SHA-256, optional)</label>
+                                <input class="form-control" id="lanternSpkiInput" maxlength="64" placeholder="64 hex digits" spellcheck="false">
+                                <div class="form-text">The SHA-256 of your TLS certificate's public key, shown to people when they approve a device. Leave empty with a certificate from a public authority.</div>
                             </div>
                             <div class="settings-option">
                                 <div class="form-check">
@@ -2001,6 +2013,9 @@
             host: $('#shopHostInput').val(),
             hauth: $('#shopHauthInput').val(),
             lantern_enabled: getCheckboxStatus("lanternEnabledCheck"),
+            lantern_scheme: getCheckboxStatus("lanternSchemeCheck") ? "https" : "",
+            lantern_hsts: getCheckboxStatus("lanternHstsCheck"),
+            lantern_spki: getInputVal("lanternSpkiInput"),
             discovery_enabled: getCheckboxStatus("discoveryEnabledCheck"),
             discovery_name: getInputVal("discoveryNameInput"),
             discovery_http_port: getInputVal("discoveryHttpPortInput"),
@@ -3153,6 +3168,9 @@
             setInputVal("motdTextArea", shopSettings['motd']);
             setInputVal("motdApiUrlInput", shopSettings['motd_api_url'] || '');
             $("#lanternEnabledCheck").prop("checked", shopSettings.lantern_enabled === true);
+            $("#lanternSchemeCheck").prop("checked", shopSettings.lantern_scheme === "https");
+            $("#lanternHstsCheck").prop("checked", shopSettings.lantern_hsts === true);
+            setInputVal("lanternSpkiInput", shopSettings.lantern_spki || "");
             $("#discoveryEnabledCheck").prop("checked", shopSettings.discovery_enabled === true);
             setInputVal("discoveryNameInput", shopSettings.discovery_name || "AeroFoil");
             setInputVal("discoveryHttpPortInput", shopSettings.discovery_http_port ?? 0);

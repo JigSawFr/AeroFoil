@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 #: Where the protocol is served (SPEC.md § 2); /.well-known/lantern answers for discovery.
 BASE = '/api/lantern'
+#: Where a signed-in user approves a pairing (SPEC.md § 5.2).
+PAIR_PATH = '/lantern/pair'
 
 ACCOUNTS_FILE = 'lantern-accounts.db'
 SECRETS_FILE = 'lantern-secrets.json'
@@ -32,6 +34,12 @@ def is_enabled(settings):
     """Whether Lantern is turned on in the settings (shop.lantern_enabled, off by default)."""
     shop = (settings or {}).get('shop') or {}
     return shop.get('lantern_enabled') is True
+
+
+def _own_page(request):
+    from lantern.server.http import not_found
+
+    raise not_found('The approval page is served by AeroFoil.')
 
 
 def build(settings, uid, config_dir=CONFIG_DIR, library=None):
@@ -62,6 +70,14 @@ def build(settings, uid, config_dir=CONFIG_DIR, library=None):
         secret=vault.get('cursor', 32),
         grant_seed=vault.get('grant', 32),
         software=('AeroFoil', 'native'),
+        # The approval page is AeroFoil's own (app/lantern_native/web.py), where the user is signed in
+        verify=PAIR_PATH,
+        # Given, so that the SDK leaves the route to AeroFoil's own page (web.py)
+        pair_page=_own_page,
+        # Behind a reverse proxy that ends TLS, the scheme clients sign is not the one this app sees
+        scheme=shop.get('lantern_scheme') or None,
+        spki=shop.get('lantern_spki') or None,
+        hsts=bool(shop.get('lantern_hsts')),
     )
 
 
@@ -85,6 +101,22 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None, start_worker=T
             uid = discovery._server_uid()
         _instance = build(settings, uid, config_dir)
         serve(app, _instance)
+        from app.lantern_native import accounts as mirror_accounts
+        from app.lantern_native import web
+
+        mirror = mirror_accounts.Mirror(_instance.accounts)
+        app.register_blueprint(web.blueprint_for(_instance, mirror))
+
+        @app.before_request
+        def _lantern_accounts():
+            # Access, frozen and deleted users reach their paired devices before a Lantern request is handled
+            from flask import request
+
+            if request.path.startswith(BASE + '/'):
+                try:
+                    mirror.sync()
+                except Exception:
+                    logger.exception('Lantern: the accounts could not be brought up to date.')
         if start_worker:
             from app.lantern_native.fingerprints import Fingerprinter
 

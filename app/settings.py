@@ -1,4 +1,5 @@
 from app.constants import *
+import re
 import yaml
 import os
 from urllib.parse import urlparse
@@ -528,6 +529,10 @@ def _normalize_shop_settings(raw_shop):
         merged.update(raw_shop)
 
     merged['lantern_enabled'] = _coerce_bool(merged.get('lantern_enabled'), default=False)
+    merged['lantern_hsts'] = _coerce_bool(merged.get('lantern_hsts'), default=False)
+    merged['lantern_scheme'] = 'https' if str(merged.get('lantern_scheme') or '').strip().lower() == 'https' else ''
+    spki = str(merged.get('lantern_spki') or '').strip().lower()
+    merged['lantern_spki'] = spki if re.fullmatch(r'[0-9a-f]{64}', spki) else ''
     merged['discovery_enabled'] = _coerce_bool(merged.get('discovery_enabled'), default=False)
     merged['discovery_name'] = str(merged.get('discovery_name') or 'AeroFoil').strip()[:100] or 'AeroFoil'
     try:

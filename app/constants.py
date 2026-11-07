@@ -153,6 +153,10 @@ DEFAULT_SETTINGS = {
     "shop": {
         # Serve the Lantern protocol (https://github.com/JigSawFr/lantern); read at start
         "lantern_enabled": False,
+        # Behind a proxy that ends TLS: the scheme clients reach the server by ("https") and its key's SHA-256
+        "lantern_scheme": "",
+        "lantern_spki": "",
+        "lantern_hsts": False,
         "discovery_enabled": False,
         "discovery_name": "AeroFoil",
         "discovery_http_port": 0,

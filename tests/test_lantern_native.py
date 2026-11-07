@@ -35,6 +35,12 @@ class LanternNativeTests(unittest.TestCase):
         self.assertTrue(_normalize_shop_settings({'lantern_enabled': 'true'})['lantern_enabled'])
         self.assertTrue(verify_settings('shop', {'lantern_enabled': True, 'discovery_http_port': 0})[0])
 
+    def test_proxy_settings_are_checked(self):
+        shop = _normalize_shop_settings({'lantern_scheme': 'HTTPS', 'lantern_spki': 'AB' * 32, 'lantern_hsts': 'true'})
+        self.assertEqual((shop['lantern_scheme'], shop['lantern_spki'], shop['lantern_hsts']), ('https', 'ab' * 32, True))
+        shop = _normalize_shop_settings({'lantern_scheme': 'ftp', 'lantern_spki': 'nope'})
+        self.assertEqual((shop['lantern_scheme'], shop['lantern_spki'], shop['lantern_hsts']), ('', '', False))
+
     def test_off_serves_nothing_and_writes_nothing(self):
         app, found = self.serve({'shop': {}})
         self.assertIsNone(found)
