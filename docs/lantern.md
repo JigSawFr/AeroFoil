@@ -50,3 +50,11 @@ made from a console shows up on the **Saves** page and the other way round, and 
 of Lantern (account, device, bcat, cache, other) are now save types of AeroFoil too; what was saved before without
 a type is offered to Lantern as `other`. Erasing a Lantern account removes only what Lantern wrote there. Backups
 that end-to-end encryption protects are a separate change.
+
+## Cheats and requests
+
+Cheats are AeroFoil's cheat files, one per game build (`data/cheats/<title id>/<build id>.txt`): a Lantern set is
+named `cs_<title id>-<build id>`, its note is the file's note, and a set written from a console is the same file
+the Cheats page shows (a set with no build id is refused). Requests for games are AeroFoil's title requests: the
+same request shared by the users who asked, visible on the Requests page; closing it there makes it `done`
+for Lantern and denying it makes it `declined`.
