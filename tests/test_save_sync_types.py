@@ -40,6 +40,7 @@ def load_save_routes():
                      MAX_TITLE_ID_LENGTH=16, MAX_SAVE_ID_LENGTH=96,
                      MAX_SAVE_NOTE_LENGTH=120, MAX_SAVE_UPLOAD_SIZE=1024 * 1024,
                      SAVE_ID_RE=re.compile(r'^[A-Za-z0-9._-]+$'),
+                     SAVE_TYPES=('unknown', 'account', 'device', 'bcat', 'cache', 'other'),
                      _is_cyberfoil_request=lambda: True,
                      titles=SimpleNamespace(load_titledb=lambda: False, release_titledb=lambda: None))
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(ROOT / 'app/app.py'), 'exec'), namespace)
@@ -166,7 +167,7 @@ class SaveTypeTests(unittest.TestCase):
     def test_capabilities_advertise_supported_types(self):
         payload = self.client.get('/api/saves/capabilities').get_json()
         self.assertTrue(payload['save_types'])
-        self.assertEqual(payload['types'], ['unknown', 'account', 'device'])
+        self.assertEqual(payload['types'], ['unknown', 'account', 'device', 'bcat', 'cache', 'other'])
 
 
 if __name__ == '__main__':

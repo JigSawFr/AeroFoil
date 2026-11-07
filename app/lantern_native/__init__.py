@@ -28,6 +28,19 @@ ANNOUNCED_FILE = 'lantern-announced.db'
 
 _instance = None
 _fingerprints = None
+_refresh_latest_save = None
+
+
+def set_save_refresher(function):
+    """app.py gives the function that rebuilds a title's "latest" copy of a save (called after a Lantern change)."""
+    global _refresh_latest_save
+    _refresh_latest_save = function
+
+
+def _refresh_latest(user, title_id, save_type):
+    if _refresh_latest_save is not None:
+        _refresh_latest_save(user, title_id, save_type=save_type)
+
 
 
 def is_enabled(settings):
@@ -58,8 +71,13 @@ def build(settings, uid, config_dir=CONFIG_DIR, library=None):
             Announced(os.path.join(config_dir, ANNOUNCED_FILE)),
             BASE,
         )
+    from app.lantern_native.saves import AeroFoilSaveStore
+
     return LanternApp(
         library,
+        saves=AeroFoilSaveStore(refresh=_refresh_latest),
+        # Encrypted backups come with their own change
+        encrypted_saves=False,
         uid=uid,
         name=str(shop.get('discovery_name') or 'AeroFoil').strip()[:100] or 'AeroFoil',
         base=BASE,

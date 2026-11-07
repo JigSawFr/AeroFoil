@@ -1804,6 +1804,8 @@ MAX_TITLE_ID_LENGTH = 16
 MAX_SAVE_NOTE_LENGTH = 120
 MAX_SAVE_ID_LENGTH = 96
 SAVE_ID_RE = re.compile(r'^[A-Za-z0-9._-]+$')
+# 'unknown' is the historical untyped folder; the others are Lantern's kinds of save (SPEC.md § 9.1)
+SAVE_TYPES = ('unknown', 'account', 'device', 'bcat', 'cache', 'other')
 
 def validate_title_id(title_id):
     """Validate title_id format (should be 16 hex characters)."""
@@ -1917,8 +1919,8 @@ def _save_sync_resolve_note():
 
 def _normalize_save_type(value):
     save_type = str(value or 'unknown').strip().lower()
-    if save_type not in ('unknown', 'account', 'device'):
-        raise ValueError('Invalid save_type. Use account, device, or unknown.')
+    if save_type not in SAVE_TYPES:
+        raise ValueError('Invalid save_type. Use account, device, bcat, cache, other, or unknown.')
     return save_type
 
 
@@ -2139,6 +2141,9 @@ def _save_sync_refresh_latest_for_title(user, title_id, save_type='unknown'):
     _save_sync_refresh_latest_from_archive(user, title_id, latest_archive, save_type=save_type)
 
 
+lantern_native.set_save_refresher(_save_sync_refresh_latest_for_title)
+
+
 def _save_sync_collect_versions_for_title(user, title_id, save_type='unknown'):
     versions = []
     title_dir = _save_sync_title_dir(user, title_id, save_type=save_type)
@@ -2240,7 +2245,7 @@ def _save_sync_collect_versions(user):
 
     saves = []
     for title_id in sorted(title_ids):
-        for save_type in ('unknown', 'account', 'device'):
+        for save_type in SAVE_TYPES:
             saves.extend(_save_sync_collect_versions_for_title(user, title_id, save_type=save_type))
 
     saves.sort(key=lambda item: (str(item.get('title_id') or ''), -(int(item.get('created_ts') or 0)), str(item.get('save_id') or '')))
@@ -6136,7 +6141,7 @@ def upload_library_status(upload_id):
 @app.get('/api/saves/capabilities')
 @save_sync_access
 def save_capabilities_api():
-    return jsonify({'save_types': True, 'types': ['unknown', 'account', 'device']})
+    return jsonify({'save_types': True, 'types': list(SAVE_TYPES)})
 
 
 @app.get('/api/saves/list')
