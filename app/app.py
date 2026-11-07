@@ -55,6 +55,7 @@ import tempfile
 from urllib.parse import quote
 
 from app import discovery
+from app import lantern_native
 from app import compressed_stream
 
 from app.db import add_access_event, get_access_events
@@ -2506,6 +2507,9 @@ def create_app():
     login_manager.init_app(app)
 
     app.register_blueprint(auth_blueprint)
+
+    # Lantern (off unless turned on in the settings); it never stops the app from starting
+    lantern_native.init_app(app)
 
     return app
 

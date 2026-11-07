@@ -151,6 +151,8 @@ DEFAULT_SETTINGS = {
         }
     },
     "shop": {
+        # Serve the Lantern protocol (https://github.com/JigSawFr/lantern); read at start
+        "lantern_enabled": False,
         "discovery_enabled": False,
         "discovery_name": "AeroFoil",
         "discovery_http_port": 0,
