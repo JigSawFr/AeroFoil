@@ -26,7 +26,7 @@ class LanternNativeTests(unittest.TestCase):
 
     def serve(self, settings):
         app = Flask(__name__)
-        found = lantern_native.init_app(app, settings, self.dir.name, UID)
+        found = lantern_native.init_app(app, settings, self.dir.name, UID, start_worker=False)
         return app, found
 
     def test_setting_is_off_by_default_and_coerces(self):
@@ -80,7 +80,7 @@ class LanternNativeTests(unittest.TestCase):
         with open(blocker, 'w', encoding='utf-8') as handle:
             handle.write('x')
         app = Flask(__name__)
-        self.assertIsNone(lantern_native.init_app(app, on(), os.path.join(blocker, 'config'), UID))
+        self.assertIsNone(lantern_native.init_app(app, on(), os.path.join(blocker, "config"), UID, start_worker=False))
 
 
 if __name__ == '__main__':
