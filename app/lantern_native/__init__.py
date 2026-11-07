@@ -21,6 +21,8 @@ BASE = '/api/lantern'
 
 ACCOUNTS_FILE = 'lantern-accounts.db'
 SECRETS_FILE = 'lantern-secrets.json'
+JOURNAL_FILE = 'lantern-journal.db'
+ANNOUNCED_FILE = 'lantern-announced.db'
 
 _instance = None
 _fingerprints = None
@@ -34,14 +36,22 @@ def is_enabled(settings):
 
 def build(settings, uid, config_dir=CONFIG_DIR, library=None):
     """The LanternApp for these settings, its accounts and secrets kept in `config_dir`."""
-    from lantern.server import MemoryLibrary, SecretsFile, SqliteAccounts
+    from lantern.server import SecretsFile, SqliteAccounts, SqliteJournal
     from lantern.server.app import LanternApp
 
     shop = settings.get('shop') or {}
     os.makedirs(config_dir, exist_ok=True)
     vault = SecretsFile(os.path.join(config_dir, SECRETS_FILE))
+    if library is None:
+        from app.lantern_native.library import Announced, AeroFoilLibrary
+
+        library = AeroFoilLibrary(
+            SqliteJournal(os.path.join(config_dir, JOURNAL_FILE)),
+            Announced(os.path.join(config_dir, ANNOUNCED_FILE)),
+            BASE,
+        )
     return LanternApp(
-        library if library is not None else MemoryLibrary(base=BASE),
+        library,
         uid=uid,
         name=str(shop.get('discovery_name') or 'AeroFoil').strip()[:100] or 'AeroFoil',
         base=BASE,
@@ -78,7 +88,7 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None, start_worker=T
         if start_worker:
             from app.lantern_native.fingerprints import Fingerprinter
 
-            _fingerprints = Fingerprinter(app)
+            _fingerprints = Fingerprinter(app, on_pass=lambda done: _instance.library.refresh())
             _fingerprints.start()
         logger.info('Lantern is served at %s (uid %s).', BASE, _instance.uid)
         return _instance
