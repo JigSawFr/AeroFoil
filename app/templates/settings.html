@@ -734,6 +734,13 @@
                         <div class="settings-option-stack">
                             <div class="settings-option">
                                 <div class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="lanternEnabledCheck">
+                                    <label class="form-check-label" for="lanternEnabledCheck">Lantern protocol</label>
+                                </div>
+                                <div class="form-text">Serve the open <a href="https://github.com/JigSawFr/lantern" target="_blank" rel="noopener noreferrer">Lantern</a> protocol at <code>/api/lantern</code> for Lantern clients. Takes effect after a restart.</div>
+                            </div>
+                            <div class="settings-option">
+                                <div class="form-check">
                                     <input type="checkbox" class="form-check-input" id="discoveryEnabledCheck">
                                     <label class="form-check-label" for="discoveryEnabledCheck">LAN discovery</label>
                                 </div>
@@ -1993,6 +2000,7 @@
         data = {
             host: $('#shopHostInput').val(),
             hauth: $('#shopHauthInput').val(),
+            lantern_enabled: getCheckboxStatus("lanternEnabledCheck"),
             discovery_enabled: getCheckboxStatus("discoveryEnabledCheck"),
             discovery_name: getInputVal("discoveryNameInput"),
             discovery_http_port: getInputVal("discoveryHttpPortInput"),
@@ -3144,6 +3152,7 @@
             $("#motdEnabledCheck").prop("checked", shopSettings['motd_enabled'] !== false);
             setInputVal("motdTextArea", shopSettings['motd']);
             setInputVal("motdApiUrlInput", shopSettings['motd_api_url'] || '');
+            $("#lanternEnabledCheck").prop("checked", shopSettings.lantern_enabled === true);
             $("#discoveryEnabledCheck").prop("checked", shopSettings.discovery_enabled === true);
             setInputVal("discoveryNameInput", shopSettings.discovery_name || "AeroFoil");
             setInputVal("discoveryHttpPortInput", shopSettings.discovery_http_port ?? 0);

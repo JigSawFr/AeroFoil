@@ -527,6 +527,7 @@ def _normalize_shop_settings(raw_shop):
     if isinstance(raw_shop, dict):
         merged.update(raw_shop)
 
+    merged['lantern_enabled'] = _coerce_bool(merged.get('lantern_enabled'), default=False)
     merged['discovery_enabled'] = _coerce_bool(merged.get('discovery_enabled'), default=False)
     merged['discovery_name'] = str(merged.get('discovery_name') or 'AeroFoil').strip()[:100] or 'AeroFoil'
     try:
