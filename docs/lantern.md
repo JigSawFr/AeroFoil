@@ -108,3 +108,11 @@ Python is too slow.
 serve and Lantern clients can read. Every file is copied and checked by its SHA-256, so it takes as long as copying
 the library, and needs the space; it runs in the background and the card shows when it is done. Decompressed
 variants are left out, the compressed originals are in. Run it again to refresh the copy.
+
+## Checking it against the specification
+
+`python tools/lantern_conformance.py --runner <path to lantern/conformance/run.py>` starts a throwaway AeroFoil in a
+temporary folder (four fictional packages, a paired device, Lantern on), runs the specification's conformance suite
+against it and stops. It needs `jsonschema` and `referencing`. On draft 0.11 it reaches Lantern Core, +titles,
++saves, +cheats, +requests, +admin, +events, +peers, +sync, +encrypted_saves and +deltas, with no failed check
+(homebrew is not offered by AeroFoil). Your own configuration and library are not touched.

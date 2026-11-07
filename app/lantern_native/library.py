@@ -67,6 +67,15 @@ def _name_of(title_id):
     return name[:200] if name and name != 'Unrecognized' else None
 
 
+_TAGS = re.compile(r'\s*\[[^\]]*\]|\s*\([^)]*\)')
+
+
+def _name_from_file(filename):
+    """A readable name from a file name, `Frost Garden [0100ABCD00010000][v0].nsp` -> `Frost Garden`."""
+    stem = os.path.splitext(str(filename or ''))[0]
+    return _TAGS.sub('', stem).strip()[:200] or None
+
+
 def listing(base, virtual=None):
     """{app id: (App without `added`, filepath)} for what is listable now: read from the database."""
     from lantern._generated.models import App, AppIncludes
@@ -108,7 +117,8 @@ def listing(base, virtual=None):
             app_id=main.app_id,
             type=TYPES[main.app_type],
             version_code=_version(main.app_version),
-            name=_name_of(title.title_id),
+            # The titles database may not know the game: its file name still says what it is
+            name=_name_of(title.title_id) or _name_from_file(file.filename),
             size=int(file.size),
             format=extension,
             # Reading a compressed package needs the console to support it (Annex A)

@@ -102,10 +102,13 @@ class PairingTests(unittest.TestCase):
         doc = self.start()
         self.assertEqual(doc['verify'], 'https://shelf.example.org' + lantern_native.PAIR_PATH)
 
-    def test_a_signed_out_user_is_sent_to_log_in(self):
+    def test_a_signed_out_user_is_told_to_log_in_without_a_redirect(self):
         answer = self.client.get(lantern_native.PAIR_PATH + '?code=ABCD-EFGH')
-        self.assertEqual(answer.status_code, 302)
-        self.assertIn('/login?next=', answer.headers['Location'])
+        self.assertEqual(answer.status_code, 200)
+        text = answer.get_data(as_text=True)
+        self.assertIn('ABCD-EFGH', text)
+        self.assertIn('/login?next=', text)
+        self.assertEqual(self.lantern.accounts.devices(), [])  # opening it approves nothing
 
     def test_a_user_approves_a_device_with_what_their_account_holds(self):
         doc = self.start()

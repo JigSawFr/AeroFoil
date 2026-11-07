@@ -115,12 +115,30 @@ class AeroFoilRequests:
     def add(self, request):
         from lantern.server.http import ProblemError
 
+        from app.db import TitleRequestUsers, TitleRequests, db
         from app.title_requests import create_title_request
 
         owner = self._owner(request.user)
         if owner is None:
             raise LookupError(f'no AeroFoil user behind the account {request.user}')
-        ok, message, row = create_title_request(owner.id, request.title_id, request.name)
+        # A title asked for again after it was declined is a new request (SPEC.md § 11): the declined one stays
+        # as it was, for the users it was declined to
+        latest = (
+            TitleRequests.query.filter_by(title_id=request.title_id.strip().upper())
+            .order_by(TitleRequests.created_at.desc(), TitleRequests.id.desc())
+            .first()
+        )
+        if latest is not None and (latest.status or '').strip().lower() == 'denied':
+            fresh = TitleRequests(
+                user_id=owner.id, title_id=latest.title_id, title_name=request.name or latest.title_name, status='open'
+            )
+            db.session.add(fresh)
+            db.session.flush()
+            db.session.add(TitleRequestUsers(user_id=owner.id, request_id=fresh.id))
+            db.session.commit()
+            ok, message, row = True, 'Request created.', fresh
+        else:
+            ok, message, row = create_title_request(owner.id, request.title_id, request.name)
         if not ok or row is None:
             raise ProblemError(409, 'conflict', message or 'The request could not be made.')
         if (row.status or 'open').strip().lower() != 'open':

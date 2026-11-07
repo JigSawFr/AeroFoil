@@ -85,6 +85,12 @@ class LibraryTests(unittest.TestCase):
         self.refresh()
         self.assertEqual(self.get('/v1/apps').get_json()['items'], [])
 
+    def test_an_app_the_titles_database_does_not_know_is_named_after_its_file(self):
+        self.add('Frost Garden [0100ABCD00010000][v0].nsp', b'game')
+        self.refresh()
+        [app] = self.get('/v1/apps').get_json()['items']
+        self.assertEqual(app['name'], 'Frost Garden')
+
     def test_a_hashed_file_is_listed_and_served(self):
         self.add('game.nsp', b'game bytes')
         self.assertEqual(self.refresh(), (1, 0))

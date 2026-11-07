@@ -140,6 +140,18 @@ class RequestTests(Harness):
         shown = self.client.get(BASE + '/v1/requests', headers=self.noors).get_json()['requests'][0]
         self.assertEqual((shown['id'], shown['status']), (request['id'], 'done'))
 
+    def test_a_title_asked_again_after_a_decline_is_a_new_request(self):
+        first = self.make().get_json()
+        self.lantern.answer_request(first['id'], 'declined', 'Not available.')
+        again = self.make()
+        self.assertEqual(again.status_code, 201, again.data)
+        second = again.get_json()
+        self.assertNotEqual(second['id'], first['id'])
+        self.assertEqual(second['status'], 'open')
+        self.assertEqual(TitleRequests.query.count(), 2)
+        listed = {r['id']: r['status'] for r in self.client.get(BASE + '/v1/requests', headers=self.noors).get_json()['requests']}
+        self.assertEqual(listed, {first['id']: 'declined', second['id']: 'open'})
+
     def test_a_title_already_in_the_library_cannot_be_requested(self):
         db.session.add(Titles(title_id=TITLE))
         db.session.commit()
