@@ -1,6 +1,7 @@
 import hashlib
 import os
 import tempfile
+import time
 import unittest
 
 from flask import Flask
@@ -124,6 +125,31 @@ class FingerprintTests(unittest.TestCase):
         seen = []
         Fingerprinter(self.app, self.store, on_hashed=seen.append).run_once()
         self.assertEqual(seen, [1])
+
+    def test_a_failed_pass_is_tried_again_soon_and_the_thread_waits_for_start(self):
+        from unittest.mock import patch
+
+        self.add('a.nsp', b'alpha')
+        worker = Fingerprinter(self.app, self.store)
+        calls = []
+        real = worker.run_once
+
+        def flaky():
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError('the database is not ready')
+            return real()
+
+        worker.run_once = flaky
+        self.assertIsNone(worker._thread)  # created, not started: app.py starts it once the database exists
+        with patch.object(fingerprints, 'RETRY_S', 0.05):
+            worker.start()
+            for _ in range(100):
+                if worker.status()['state'] == 'idle' and worker.status()['hashed'] == 1:
+                    break
+                time.sleep(0.05)
+            worker.stop()
+        self.assertEqual((len(calls), worker.status()['hashed']), (2, 1))
 
 
 if __name__ == '__main__':

@@ -31,6 +31,8 @@ PRIORITY = {APP_TYPE_BASE: 0, APP_TYPE_UPD: 1, APP_TYPE_DLC: 2}
 UNCLAIMED = 3
 #: Seconds between two runs when nothing wakes the worker.
 INTERVAL_S = 15 * 60
+#: Seconds before trying again after a pass failed (the database not ready, a disk gone for a moment).
+RETRY_S = 30
 BATCH = 500
 #: Seconds at most between two refreshes of the Lantern listing while hashing.
 REFRESH_EVERY_S = 60
@@ -173,6 +175,7 @@ class Fingerprinter:
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._thread = None
+        self._failed = False
         self._status = {'state': 'idle', 'hashed': 0, 'pending': 0, 'pending_bytes': 0, 'updated_at': None}
         self._lock = threading.Lock()
 
@@ -201,15 +204,17 @@ class Fingerprinter:
 
     def _loop(self):
         while not self._stop.is_set():
-            self._wake.wait(INTERVAL_S)
+            self._wake.wait(RETRY_S if self._failed else INTERVAL_S)
             self._wake.clear()
             if self._stop.is_set():
                 break
             try:
                 with self.app.app_context():
                     self.run_once()
+                self._failed = False
             except Exception:
-                logger.exception('Lantern fingerprinting failed; it tries again later.')
+                logger.exception('Lantern fingerprinting failed; it tries again in %d seconds.', RETRY_S)
+                self._failed = True
                 self._set(state='error')
 
     def run_once(self):

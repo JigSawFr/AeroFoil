@@ -161,12 +161,12 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None, start_worker=T
             from app.lantern_native.variants import VariantBuilder
 
             library = _instance.library
+            # Created now, started by start() once the database exists (see app.py)
             _fingerprints = Fingerprinter(
                 app,
                 on_pass=lambda done: library.refresh(),
                 variants=VariantBuilder(library.virtual) if library.virtual is not None else None,
             )
-            _fingerprints.start()
         logger.info('Lantern is served at %s (uid %s).', BASE, _instance.uid)
         return _instance
     except Exception:
@@ -232,6 +232,12 @@ def stop():
         _dnssd = None
     if _fingerprints is not None:
         _fingerprints.stop()
+
+
+def start():
+    """Starts the fingerprint worker. app.py calls it once the database is ready: at import it does not exist yet."""
+    if _fingerprints is not None:
+        _fingerprints.start()
 
 
 def kick():

@@ -8373,6 +8373,7 @@ if __name__ == '__main__':
     init_db(app)
     init_users(app)
     init()
+    lantern_native.start()
     logger.info('Initialization steps done, starting server...')
     host = (os.environ.get('AEROFOIL_HOST') or os.environ.get('OWNFOIL_HOST') or '0.0.0.0').strip() or '0.0.0.0'
     port = _read_int_env('AEROFOIL_PORT', _read_int_env('OWNFOIL_PORT', 8465, minimum=1, maximum=65535), minimum=1, maximum=65535)
