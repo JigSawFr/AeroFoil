@@ -35,6 +35,14 @@
             <div id="changePasswordStatus" class="alert mt-3 d-none" role="alert"></div>
           </div>
         </div>
+
+        <div class="card mt-4" id="lanternDevicesCard" hidden>
+          <div class="card-body">
+            <h5 class="card-title">Lantern devices</h5>
+            <p class="text-muted">Devices paired with this account through the Lantern protocol. Revoke one to sign it out.</p>
+            <ul class="list-group" id="lanternDevicesList"></ul>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -121,6 +129,40 @@
         changePassword();
       }
     });
+  })();
+</script>
+<script>
+  (function () {
+    const card = document.getElementById('lanternDevicesCard');
+    const list = document.getElementById('lanternDevicesList');
+    if (!card || !list) return;
+    function render(devices) {
+      list.textContent = '';
+      devices.forEach(function (device) {
+        const item = document.createElement('li');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        const label = document.createElement('span');
+        label.textContent = device.device + ' \u2014 ' + device.scopes.join(', ') +
+          (device.last_used ? ' (last used ' + device.last_used + ')' : '');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn btn-sm btn-outline-danger';
+        button.textContent = 'Revoke';
+        button.addEventListener('click', function () {
+          fetch('/api/lantern-native/devices/' + encodeURIComponent(device.id), { method: 'DELETE' }).then(load);
+        });
+        item.appendChild(label);
+        item.appendChild(button);
+        list.appendChild(item);
+      });
+      card.hidden = devices.length === 0;
+    }
+    function load() {
+      fetch('/api/lantern-native/devices').then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+        if (data && data.devices) render(data.devices);
+      }).catch(function () {});
+    }
+    load();
   })();
 </script>
 {% endblock %}

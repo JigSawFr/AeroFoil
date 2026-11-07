@@ -26,3 +26,14 @@ An app's id comes from its bytes, so the same file in two places is one app; a b
 and DLC is one app that includes the others. Files are served in place, with ranges and `Repr-Digest`.
 `/v1/changes` says what really changed, also across a restart (`config/lantern-journal.db` and
 `config/lantern-announced.db`).
+
+## Accounts and pairing
+
+A Lantern account is an AeroFoil user. A device shows a short code; the user opens `/lantern/pair` on AeroFoil,
+signs in as usual, compares the key fingerprint when one is set, and approves. The device gets what the account
+may do: the library and requests with shop access, saves with backup access, cheats with cheat access,
+administration with admin access. Freezing a user freezes their devices and deleting a user deletes them (within
+a few seconds). Users list and revoke their devices on **Profile**.
+
+Behind a reverse proxy that ends TLS, tick **Behind an HTTPS reverse proxy** in the settings (devices sign the
+`https` address they use) and, with a certificate from a private authority, give the key's fingerprint.
