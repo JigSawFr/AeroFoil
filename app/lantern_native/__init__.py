@@ -71,11 +71,13 @@ def build(settings, uid, config_dir=CONFIG_DIR, library=None):
             Announced(os.path.join(config_dir, ANNOUNCED_FILE)),
             BASE,
         )
+    from app.lantern_native.requests import AeroFoilRequests
     from app.lantern_native.saves import AeroFoilSaveStore
 
     return LanternApp(
         library,
         saves=AeroFoilSaveStore(refresh=_refresh_latest),
+        requests=AeroFoilRequests(os.path.join(config_dir, 'lantern-request-ids.db')),
         # Encrypted backups come with their own change
         encrypted_saves=False,
         uid=uid,

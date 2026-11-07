@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import threading
 from datetime import datetime, timezone
 
@@ -182,7 +183,7 @@ class Announced:
 class AeroFoilLibrary:
     """`lantern.server.Library` and `Journal` over AeroFoil's files. Core only for now: apps and their files."""
 
-    families = frozenset({'library', 'titles', 'sections'})
+    families = frozenset({'library', 'titles', 'sections', 'cheats'})
 
     def __init__(self, journal, announced, base='/api/lantern', on_change=None):
         self.base = base.rstrip('/')
@@ -364,15 +365,118 @@ class AeroFoilLibrary:
     def homebrew(self, languages):
         return []
 
+    # Cheats: AeroFoil keeps one text file per game build (app/cheats.py); a set's id is made of both.
+
+    @staticmethod
+    def _cheat_id(title_id, build_id):
+        return f'cs_{title_id}-{build_id}'
+
+    def _cheat_file(self, title_id, build_id):
+        from lantern.server.files import FileRef
+
+        from app import cheats as store
+
+        path = store._cheat_path(title_id, build_id)
+        try:
+            info = os.stat(path)
+        except OSError:
+            return None
+        key = (path, info.st_mtime_ns, info.st_size)
+        sha256 = self._image_memo.get(key)
+        if sha256 is None:
+            with open(path, 'rb') as handle:
+                sha256 = self._image_memo[key] = hashlib.sha256(handle.read()).hexdigest()
+        return FileRef(path, info.st_size, sha256, 'text/plain; charset=utf-8'), info.st_mtime
+
+    def _cheat_set(self, title_id, build_id, notes=None, sources=None):
+        from lantern._generated.models import CheatSet
+
+        from app import cheats as store
+
+        found = self._cheat_file(title_id, build_id)
+        if found is None:
+            return None
+        ref, mtime = found
+        notes = store._load_metadata() if notes is None else notes
+        sources = self._cheat_sources() if sources is None else sources
+        note = str(notes.get(store._metadata_key(title_id, build_id), '') or '').strip()
+        return CheatSet(
+            id=self._cheat_id(title_id, build_id),
+            platform=PLATFORM,
+            title_id=title_id,
+            build_id=build_id,
+            source=sources.get(f'{title_id}/{build_id}', 'aerofoil'),
+            note=note[:1000] or None,
+            updated=datetime.fromtimestamp(mtime, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+            size=ref.size,
+            sha256=ref.sha256,
+        )
+
+    def _cheat_sources(self):
+        """Who wrote a set, for the sets Lantern clients wrote (AeroFoil keeps no such thing)."""
+        from app import cheats as store
+
+        try:
+            with open(os.path.join(store.CHEATS_DIR, 'lantern-sources.json'), encoding='utf-8') as handle:
+                doc = json.load(handle)
+            return doc if isinstance(doc, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
     def cheats(self):
-        return []
+        from app import cheats as store
+
+        out = []
+        notes, sources = store._load_metadata(), self._cheat_sources()
+        for entry in store.list_cheats():
+            cheat = self._cheat_set(entry['title_id'], entry['build_id'], notes, sources)
+            if cheat is not None:
+                out.append(cheat)
+        return out
+
+    def cheat_file(self, cheat_id):
+        match = re.fullmatch(r'cs_([0-9A-F]{16})-([0-9A-F]{16,64})', cheat_id or '')
+        found = self._cheat_file(*match.groups()) if match else None
+        return found[0] if found else None
+
+    def write_cheat(self, *, platform, title_id, build_id, source, note, text, replacing=None):
+        from lantern.server.http import bad_request
+
+        from app import cheats as store
+
+        if not build_id:
+            raise bad_request('AeroFoil keeps one cheat file per game build: give the build id.')
+        title_id, build_id = store.normalize_title_id(title_id), store.normalize_build_id(build_id)
+        if not title_id or not build_id:
+            raise bad_request('A 16-character title id and a hexadecimal build id are required.')
+        if replacing is not None and replacing != self._cheat_id(title_id, build_id):
+            raise bad_request('A set replaces the one of its own game build.')
+        try:
+            store.save_cheat(title_id, build_id, text.encode('utf-8'))
+            store.set_cheat_note(title_id, build_id, note or '')
+        except ValueError as error:
+            raise bad_request(str(error)) from None
+        sources = self._cheat_sources()
+        sources[f'{title_id}/{build_id}'] = source
+        with open(os.path.join(store.CHEATS_DIR, 'lantern-sources.json'), 'w', encoding='utf-8') as handle:
+            json.dump(sources, handle, sort_keys=True)
+        return self._cheat_set(title_id, build_id)
+
+    def delete_cheat(self, cheat_id):
+        from app import cheats as store
+
+        match = re.fullmatch(r'cs_([0-9A-F]{16})-([0-9A-F]{16,64})', cheat_id or '')
+        if not match or not store.delete_cheat(*match.groups()):
+            return False
+        sources = self._cheat_sources()
+        if sources.pop(f'{match.group(1)}/{match.group(2)}', None) is not None:
+            with open(os.path.join(store.CHEATS_DIR, 'lantern-sources.json'), 'w', encoding='utf-8') as handle:
+                json.dump(sources, handle, sort_keys=True)
+        return True
 
     def file(self, file_id):
         with self._lock:
             return self._files.get(file_id)
-
-    def cheat_file(self, cheat_id):
-        return None
 
     def journal(self):
         return self
