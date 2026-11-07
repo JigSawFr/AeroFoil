@@ -57,7 +57,7 @@ def _own_page(request):
 
 def build(settings, uid, config_dir=CONFIG_DIR, library=None):
     """The LanternApp for these settings, its accounts and secrets kept in `config_dir`."""
-    from lantern.server import SecretsFile, SqliteAccounts, SqliteJournal
+    from lantern.server import SecretsFile, SqliteJournal
     from lantern.server.app import LanternApp
 
     shop = settings.get('shop') or {}
@@ -71,6 +71,7 @@ def build(settings, uid, config_dir=CONFIG_DIR, library=None):
             Announced(os.path.join(config_dir, ANNOUNCED_FILE)),
             BASE,
         )
+    from app.lantern_native.accounts import make_accounts
     from app.lantern_native.requests import AeroFoilRequests
     from app.lantern_native.saves import AeroFoilSaveStore
 
@@ -83,7 +84,7 @@ def build(settings, uid, config_dir=CONFIG_DIR, library=None):
         uid=uid,
         name=str(shop.get('discovery_name') or 'AeroFoil').strip()[:100] or 'AeroFoil',
         base=BASE,
-        accounts=SqliteAccounts(os.path.join(config_dir, ACCOUNTS_FILE)),
+        accounts=make_accounts(os.path.join(config_dir, ACCOUNTS_FILE)),
         # A private shop shows nothing to a client that has not paired
         public=bool(shop.get('public')),
         # Cursors and since tokens, and the grant key of peers, must survive a restart
@@ -124,7 +125,9 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None, start_worker=T
         from app.lantern_native import accounts as mirror_accounts
         from app.lantern_native import web
 
-        mirror = mirror_accounts.Mirror(_instance.accounts)
+        mirror = mirror_accounts.Mirror(
+            _instance.accounts, names_file=os.path.join(config_dir, 'lantern-mirrored.json')
+        )
         app.register_blueprint(web.blueprint_for(_instance, mirror))
 
         @app.before_request

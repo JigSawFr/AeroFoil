@@ -58,3 +58,12 @@ named `cs_<title id>-<build id>`, its note is the file's note, and a set written
 the Cheats page shows (a set with no build id is refused). Requests for games are AeroFoil's title requests: the
 same request shared by the users who asked, visible on the Requests page; closing it there makes it `done`
 for Lantern and denying it makes it `declined`.
+
+## Administration
+
+An administrator's device (admin access) can use Lantern's administration API: accounts, devices, invitations,
+pairings and request decisions. Lantern accounts follow AeroFoil's users: scopes and frozen state are brought
+back in line with the user's access within a few seconds, so change them on the **Users** page. An account made
+by hand through the API is left alone. A user's **maximum rating** is a cap on all their devices, set before or
+after pairing (the stricter of it and an invitation's wins). **Manage** shows the fingerprint progress while the
+library is being read for the first time.

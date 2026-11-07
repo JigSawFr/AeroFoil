@@ -200,6 +200,87 @@ class PairingTests(unittest.TestCase):
         self.assertEqual(self.lantern.accounts.devices(), [])
         self.assertEqual(self.client.get(url, headers=headers, base_url='https://shelf.example.org').status_code, 401)
 
+    def pair(self, user):
+        doc = self.start(('library',))
+        self.login(user)
+        g.pop('_login_user', None)
+        text = self.client.get(lantern_native.PAIR_PATH, query_string={'code': doc['code']}).get_data(as_text=True)
+        self.client.post(
+            lantern_native.PAIR_PATH, data={'code': doc['code'], 'csrf': self.csrf(text), 'decision': 'approve'}
+        )
+        return self.client.get(doc['poll'], base_url='https://shelf.example.org').get_json()['token']
+
+    def account(self, token):
+        return self.client.get(
+            BASE + '/v1', headers={'Authorization': f'Bearer {token}'}, base_url='https://shelf.example.org'
+        ).get_json()['account']
+
+    def test_a_users_age_cap_follows_their_devices(self):
+        token = self.pair(self.lea)
+        self.assertNotIn('rating_cap', self.account(token))
+        mirror = mirror_accounts.Mirror(self.lantern.accounts)
+        self.lea.max_rating = 12
+        db.session.commit()
+        mirror.sync(force=True)
+        self.assertEqual(self.account(token)['rating_cap'], {'age': 12})
+        self.lea.max_rating = 7
+        db.session.commit()
+        mirror.sync(force=True)
+        self.assertEqual(self.account(token)['rating_cap'], {'age': 7})
+        self.lea.max_rating = None
+        db.session.commit()
+        mirror.sync(force=True)
+        self.assertNotIn('rating_cap', self.account(token))
+
+    def test_a_stricter_cap_of_the_device_is_kept(self):
+        from lantern._generated.models import RatingCap
+
+        self.lantern.accounts.create_user('lea', ['library'])
+        token, _ = self.lantern.accounts.issue('lea', 'tablet', ['library'], rating_cap=RatingCap(age=3))
+        mirror = mirror_accounts.Mirror(self.lantern.accounts)
+        self.lea.max_rating = 12
+        db.session.commit()
+        mirror.sync(force=True)
+        self.assertEqual(self.account(token)['rating_cap'], {'age': 3})
+
+    def test_an_account_made_by_hand_is_not_deleted_with_the_users(self):
+        names = os.path.join(self.dir.name, 'mirrored.json')
+        mirror = mirror_accounts.Mirror(self.lantern.accounts, names_file=names)
+        self.lantern.accounts.create_user('by-hand', ['library'])
+        mirror_accounts.ensure_account(self.lantern.accounts, self.lea)
+        mirror.sync(force=True)
+        self.assertIsNotNone(self.lantern.accounts.user('lea'))
+        db.session.delete(self.lea)
+        db.session.commit()
+        mirror.sync(force=True)
+        self.assertIsNone(self.lantern.accounts.user('lea'))
+        self.assertIsNotNone(self.lantern.accounts.user('by-hand'))
+        self.assertEqual(mirror_accounts.Mirror(self.lantern.accounts, names_file=names)._names, set())
+
+    def test_an_administrator_sees_the_accounts_through_the_admin_api(self):
+        boss = make_user('boss', admin_access=True)
+        token = self.pair_admin(boss)
+        users = self.client.get(
+            BASE + '/v1/admin/users', headers={'Authorization': f'Bearer {token}'}, base_url='https://shelf.example.org'
+        )
+        self.assertEqual(users.status_code, 200, users.data)
+        self.assertIn('boss', [u['name'] for u in users.get_json()['items']])
+        plain = self.pair(self.lea)
+        refused = self.client.get(
+            BASE + '/v1/admin/users', headers={'Authorization': f'Bearer {plain}'}, base_url='https://shelf.example.org'
+        )
+        self.assertIn(refused.status_code, (403, 404))
+
+    def pair_admin(self, user):
+        doc = self.start(('library', 'admin'))
+        self.login(user)
+        g.pop('_login_user', None)
+        text = self.client.get(lantern_native.PAIR_PATH, query_string={'code': doc['code']}).get_data(as_text=True)
+        self.client.post(
+            lantern_native.PAIR_PATH, data={'code': doc['code'], 'csrf': self.csrf(text), 'decision': 'approve'}
+        )
+        return self.client.get(doc['poll'], base_url='https://shelf.example.org').get_json()['token']
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -87,6 +87,7 @@ def blueprint_for(lantern, mirror):
                 return _page('<p>This page expired. Go back and try again.</p>', 400)
             if request.form.get('decision') == 'approve':
                 name = mirror_accounts.ensure_account(lantern.accounts, current_user)
+                mirror.remember(name)
                 granted = lantern.desk.approve(entry, name)
                 shown = html.escape(', '.join(granted) or 'nothing')
                 return _page(f'<p>Approved <strong>{html.escape(entry.device)}</strong> as {html.escape(name)}: {shown}.</p>')

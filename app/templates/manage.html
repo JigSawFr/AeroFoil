@@ -43,6 +43,14 @@
 
                 <div id="manageAlert" class="alert alert-info d-none mb-3" role="alert"></div>
 
+                <div class="card mb-3" id="lanternStatusCard" hidden>
+                    <div class="card-body">
+                        <h5 class="card-title mb-1">Lantern</h5>
+                        <div class="text-muted small" id="lanternStatusText"></div>
+                        <div class="progress mt-2" style="height: 0.5rem;"><div class="progress-bar" id="lanternStatusBar" role="progressbar" style="width: 0%"></div></div>
+                    </div>
+                </div>
+
                 <div class="row g-3">
                     <div class="col-xl-8 col-lg-12">
                         <div class="card mb-3">
@@ -1198,6 +1206,29 @@
             }
         });
     });
+</script>
+
+<script>
+    (function () {
+        const card = document.getElementById('lanternStatusCard');
+        if (!card) return;
+        function refresh() {
+            fetch('/api/lantern-native/status').then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+                const lantern = data && data.lantern;
+                if (!lantern || !lantern.enabled || !lantern.fingerprints) { card.hidden = true; return; }
+                const f = lantern.fingerprints;
+                const total = f.hashed + f.pending;
+                card.hidden = false;
+                document.getElementById('lanternStatusText').textContent = f.pending === 0
+                    ? 'Lantern is serving ' + f.hashed + ' file(s).'
+                    : 'Lantern is fingerprinting your library: ' + f.hashed + ' of ' + total + ' file(s) done, ' +
+                      Math.round(f.pending_bytes / 1073741824 * 10) / 10 + ' GiB left.';
+                document.getElementById('lanternStatusBar').style.width = (total ? Math.round(f.hashed / total * 100) : 100) + '%';
+            }).catch(function () {});
+        }
+        refresh();
+        setInterval(refresh, 15000);
+    })();
 </script>
 
 {% endblock %}

@@ -5,8 +5,11 @@ belongs to carries that user's name and what they may do (scopes), so a change o
 deleted user reaches the devices already paired.
 """
 
+import dataclasses
 import hashlib
+import json
 import logging
+import os
 import re
 import threading
 import time
@@ -62,11 +65,29 @@ def ensure_account(accounts, user):
 class Mirror:
     """Keeps the Lantern accounts equal to the AeroFoil users they come from, at most every few seconds."""
 
-    def __init__(self, accounts, clock=time.monotonic):
+    def __init__(self, accounts, clock=time.monotonic, names_file=None):
         self.accounts = accounts
         self.clock = clock
         self._last = None
         self._lock = threading.Lock()
+        #: The accounts this mirror made, kept in a file: an account an administrator made by hand is not one
+        #: of AeroFoil's users, and is left alone.
+        self._names_file = names_file
+        self._names = self._read_names()
+
+    def _read_names(self):
+        if not self._names_file:
+            return None
+        try:
+            with open(self._names_file, encoding='utf-8') as handle:
+                return set(json.load(handle))
+        except (OSError, ValueError):
+            return set()
+
+    def _write_names(self):
+        if self._names_file:
+            with open(self._names_file, 'w', encoding='utf-8') as handle:
+                json.dump(sorted(self._names), handle)
 
     def sync(self, force=False):
         from app.db import User
@@ -77,13 +98,28 @@ class Mirror:
                 return
             self._last = now
             users = {lantern_name(u.user): u for u in User.query.all()}
+            caps = getattr(self.accounts, 'caps', None)
+            if caps is not None:
+                caps.clear()
+                caps.update({n: u.max_rating for n, u in users.items() if isinstance(u.max_rating, int)})
             for account in list(self.accounts.users()):
                 user = users.get(account.name)
                 if user is None:
-                    self.accounts.delete_user(account.name)
-                    logger.info('Lantern: the account %s went with its AeroFoil user.', account.name)
+                    if self._names is None or account.name in self._names:
+                        self.accounts.delete_user(account.name)
+                        if self._names is not None:
+                            self._names.discard(account.name)
+                            self._write_names()
+                        logger.info('Lantern: the account %s went with its AeroFoil user.', account.name)
                 else:
                     ensure_account(self.accounts, user)
+                    self.remember(account.name)
+
+    def remember(self, name):
+        """Notes that an account is made from an AeroFoil user (it is deleted with them)."""
+        if self._names is not None and name not in self._names:
+            self._names.add(name)
+            self._write_names()
 
     def owner(self, device):
         """The AeroFoil user a Lantern device belongs to, or None."""
@@ -93,3 +129,35 @@ class Mirror:
             if lantern_name(user.user) == device.user:
                 return user
         return None
+
+
+def make_accounts(path):
+    """The SDK's SQLite accounts, with AeroFoil's age cap of each user applied to their devices."""
+    from lantern.server import SqliteAccounts
+
+    class AeroFoilAccounts(SqliteAccounts):
+        """A user's `max_rating` is a cap on every one of their devices, whenever it was set: the stricter of it
+        and the device's own cap (an invitation's). The caps come from `Mirror.sync`."""
+
+        caps = {}
+
+        def _capped(self, device):
+            from lantern._generated.models import RatingCap
+            from lantern.ratings import cap_age
+
+            age = None if device is None else self.caps.get(device.user)
+            if device is None or age is None:
+                return device
+            own = cap_age(device.rating_cap) if device.rating_cap is not None else None
+            if own is not None and own <= age:
+                return device
+            return dataclasses.replace(device, rating_cap=RatingCap(age=age))
+
+        def device_of(self, token):
+            device = super().device_of(token)
+            return self._capped(device) if device is not None else None
+
+        def devices(self, user=None):
+            return [self._capped(d) for d in super().devices(user)]
+
+    return AeroFoilAccounts(path)
