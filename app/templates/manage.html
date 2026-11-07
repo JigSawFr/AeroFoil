@@ -48,6 +48,10 @@
                         <h5 class="card-title mb-1">Lantern</h5>
                         <div class="text-muted small" id="lanternStatusText"></div>
                         <div class="progress mt-2" style="height: 0.5rem;"><div class="progress-bar" id="lanternStatusBar" role="progressbar" style="width: 0%"></div></div>
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="lanternExportBtn">Export a static copy</button>
+                            <span class="text-muted small" id="lanternExportText">Copies the library and its pages to <code>data/lantern-export/library</code>, for a web host, a NAS or a USB key.</span>
+                        </div>
                     </div>
                 </div>
 
@@ -1226,6 +1230,25 @@
                 document.getElementById('lanternStatusBar').style.width = (total ? Math.round(f.hashed / total * 100) : 100) + '%';
             }).catch(function () {});
         }
+        const exportBtn = document.getElementById('lanternExportBtn');
+        const exportText = document.getElementById('lanternExportText');
+        function exportStatus() {
+            fetch('/api/lantern-native/export').then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+                const e = data && data.export;
+                if (!e) return;
+                exportBtn.disabled = e.state === 'running';
+                if (e.state === 'running') exportText.textContent = 'Exporting...';
+                else if (e.state === 'done') exportText.textContent = 'Exported ' + e.files + ' file(s) to ' + e.path + '.';
+                else if (e.state === 'failed') exportText.textContent = 'The export failed: ' + e.error;
+            }).catch(function () {});
+        }
+        exportBtn.addEventListener('click', function () {
+            fetch('/api/lantern-native/export', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'library' })
+            }).then(exportStatus);
+        });
+        exportStatus();
+        setInterval(exportStatus, 5000);
         refresh();
         setInterval(refresh, 15000);
     })();

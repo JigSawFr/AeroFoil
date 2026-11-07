@@ -13,6 +13,7 @@ from flask_login import current_user, login_required
 
 from app.lantern_native import PAIR_PATH
 from app.lantern_native import accounts as mirror_accounts
+from app.lantern_native import static_export
 
 ATTEMPTS = 10
 WINDOW_S = 300
@@ -136,5 +137,34 @@ def blueprint_for(lantern, mirror):
             return jsonify({'success': False, 'error': 'No such device.'}), 404
         lantern.accounts.revoke(device_id)
         return jsonify({'success': True})
+
+    exporter = static_export.Exporter(lantern)
+
+    def admin_only():
+        if not current_user.has_admin_access():
+            return jsonify({'success': False, 'error': 'Administrators only.'}), 403
+        return None
+
+    @blueprint.get('/api/lantern-native/export')
+    @login_required
+    def export_status():
+        return admin_only() or jsonify({'success': True, 'export': exporter.status()})
+
+    @blueprint.post('/api/lantern-native/export')
+    @login_required
+    def export_start():
+        refused = admin_only()
+        if refused is not None:
+            return refused
+        if not request.is_json:  # a form from another site cannot send this
+            return jsonify({'success': False, 'error': 'Send JSON.'}), 415
+        name = str((request.get_json(silent=True) or {}).get('name') or 'library').strip()
+        try:
+            started = exporter.start(name)
+        except ValueError as error:
+            return jsonify({'success': False, 'error': str(error)}), 400
+        if not started:
+            return jsonify({'success': False, 'error': 'An export is already running.'}), 409
+        return jsonify({'success': True, 'export': exporter.status()}), 202
 
     return blueprint

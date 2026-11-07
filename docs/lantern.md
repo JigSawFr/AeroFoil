@@ -100,3 +100,11 @@ settings.
 Files between 128 KiB and 64 MiB (updates, small packages) carry a chunk index, kept in `config/lantern-chunks/`,
 so a device that has an older version fetches only the pieces it lacks. Larger files have none: cutting them in
 Python is too slow.
+
+## Static copy
+
+**Manage → Lantern → Export a static copy** writes the library as plain files and pages
+(`data/lantern-export/library/`: `lantern.json`, `v1/` and the files), which any web host, NAS or USB key can
+serve and Lantern clients can read. Every file is copied and checked by its SHA-256, so it takes as long as copying
+the library, and needs the space; it runs in the background and the card shows when it is done. Decompressed
+variants are left out, the compressed originals are in. Run it again to refresh the copy.

@@ -6,10 +6,10 @@ from unittest.mock import patch
 
 try:
     from test_compressed_stream import _Container, _Entry, _nsz_components, _ncz
-    from test_lantern_library import BASE, TITLE, LibraryTests
+    import test_lantern_library as library_tests
 except ImportError:  # run as tests.test_lantern_variants
     from tests.test_compressed_stream import _Container, _Entry, _nsz_components, _ncz
-    from tests.test_lantern_library import BASE, TITLE, LibraryTests
+    from tests import test_lantern_library as library_tests
 
 from app import compressed_stream
 from app.db import Files, db
@@ -59,7 +59,7 @@ class DeterminismTests(unittest.TestCase):
         self.assertFalse(_normalize_shop_settings({'lantern_variants': 'false'})['lantern_variants'])
 
 
-class VariantLibraryTests(LibraryTests):
+class VariantLibraryTests(library_tests.LibraryTests):
     PLAIN = b'PFS0' + bytes(range(256)) * 20
 
     def fake_streams(self):
