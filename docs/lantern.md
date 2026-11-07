@@ -42,3 +42,11 @@ a few seconds). Users list and revoke their devices on **Profile**.
 
 Behind a reverse proxy that ends TLS, tick **Behind an HTTPS reverse proxy** in the settings (devices sign the
 `https` address they use) and, with a certificate from a private authority, give the key's fingerprint.
+
+## Saves
+
+Lantern save backups live in AeroFoil's own saves folder (`data/saves/<user>/<title id>/<kind>/`), so a backup
+made from a console shows up on the **Saves** page and the other way round, and nothing is copied. The five kinds
+of Lantern (account, device, bcat, cache, other) are now save types of AeroFoil too; what was saved before without
+a type is offered to Lantern as `other`. Erasing a Lantern account removes only what Lantern wrote there. Backups
+that end-to-end encryption protects are a separate change.
