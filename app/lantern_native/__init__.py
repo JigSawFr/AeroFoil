@@ -58,7 +58,7 @@ def _own_page(request):
 
 def build(settings, uid, config_dir=CONFIG_DIR, library=None):
     """The LanternApp for these settings, its accounts and secrets kept in `config_dir`."""
-    from lantern.server import SecretsFile, SqliteJournal
+    from lantern.server import SecretsFile, SqliteJournal, SqliteSync
     from lantern.server.app import LanternApp
 
     shop = settings.get('shop') or {}
@@ -80,8 +80,10 @@ def build(settings, uid, config_dir=CONFIG_DIR, library=None):
         library,
         saves=AeroFoilSaveStore(refresh=_refresh_latest),
         requests=AeroFoilRequests(os.path.join(config_dir, 'lantern-request-ids.db')),
-        # Encrypted backups come with their own change
-        encrypted_saves=False,
+        # End-to-end encrypted backups are kept as sent; AeroFoil never holds the key (SPEC.md § 9.4)
+        encrypted_saves=True,
+        # What each user keeps in sync (wishes, installed), surviving a restart
+        sync=SqliteSync(os.path.join(config_dir, 'lantern-sync.db')),
         uid=uid,
         name=str(shop.get('discovery_name') or 'AeroFoil').strip()[:100] or 'AeroFoil',
         base=BASE,

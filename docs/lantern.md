@@ -75,3 +75,14 @@ changed (on the Cheats page too), plus the backups, requests and pairings the pr
 AeroFoil process: the streams are held in it. When **LAN discovery** is also on in the settings, AeroFoil
 announces itself with DNS-SD (`_lantern._tcp`, the advertised web port of the same setting) so Lantern clients
 find it without an address.
+
+## Encrypted backups, sync and peers
+
+- **End-to-end encrypted backups** (the console encrypts, AeroFoil never holds a key) are kept as sent in `.enc`
+  files next to the other backups. AeroFoil's Saves page does not list them: it cannot read them, and Lantern
+  clients get them back as they were sent.
+- **Sync** keeps each user's wishes and installed lists (`config/lantern-sync.db`), merged item by item and kept
+  across restarts.
+- **Peers**: the server signs short-lived grants for its files with a key kept in `config/lantern-secrets.json`,
+  the same after a restart, so other Lantern servers and devices can fetch from it. Declaring mirrors of a file
+  is not offered yet.
