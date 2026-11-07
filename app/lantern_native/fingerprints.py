@@ -32,6 +32,8 @@ UNCLAIMED = 3
 #: Seconds between two runs when nothing wakes the worker.
 INTERVAL_S = 15 * 60
 BATCH = 500
+#: Seconds at most between two refreshes of the Lantern listing while hashing.
+REFRESH_EVERY_S = 60
 
 
 def _entry(path, size, mtime_ns, priority):
@@ -162,8 +164,9 @@ class Fingerprinter:
     """The background worker: refreshes the validators, hashes what is pending, checks a sample. Woken by
     `kick()` (the library changed) and by a timer."""
 
-    def __init__(self, app, store=None, on_hashed=None):
+    def __init__(self, app, store=None, on_hashed=None, on_pass=None):
         self.app = app
+        self.on_pass = on_pass
         self.store = store or FilesStore()
         self.on_hashed = on_hashed
         self._wake = threading.Event()
@@ -217,18 +220,28 @@ class Fingerprinter:
         # A sample first, so a file found changed is hashed again in this very pass
         verify_sample(self.store, ROOTS, 3)
         done = 0
+        last = 0.0
         while not self._stop.is_set():
+            # What is hashed so far is listed without waiting for the whole library (at most once a minute)
+            if time.monotonic() - last >= REFRESH_EVERY_S:
+                self._pass(done)
+                last = time.monotonic()
             self._set(state='hashing', **self._counts())
             count = hash_pending(self.store, ROOTS, limit=25, should_stop=self._stop.is_set)
             if count == 0:
                 break
             done += count
         self._set(state='idle', **self._counts())
+        self._pass(done)
         if done:
             logger.info('Lantern: hashed %d file(s).', done)
             if self.on_hashed is not None:
                 self.on_hashed(done)
         return done
+
+    def _pass(self, done):
+        if self.on_pass is not None:
+            self.on_pass(done)
 
     def _counts(self):
         counts = self.store.counts()
