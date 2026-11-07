@@ -67,3 +67,11 @@ back in line with the user's access within a few seconds, so change them on the 
 by hand through the API is left alone. A user's **maximum rating** is a cap on all their devices, set before or
 after pairing (the stricter of it and an invitation's wins). **Manage** shows the fingerprint progress while the
 library is being read for the first time.
+
+## Events and the LAN
+
+Devices that keep a connection open hear about changes at once: games added or removed, a sheet changed, a cheat
+changed (on the Cheats page too), plus the backups, requests and pairings the protocol itself tells. Run one
+AeroFoil process: the streams are held in it. When **LAN discovery** is also on in the settings, AeroFoil
+announces itself with DNS-SD (`_lantern._tcp`, the advertised web port of the same setting) so Lantern clients
+find it without an address.

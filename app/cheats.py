@@ -31,6 +31,18 @@ def normalize_build_id(value):
     return value if BUILD_ID_RE.fullmatch(value) else None
 
 
+#: Called with the title id after a cheat file is written, noted or deleted (Lantern's events listen here).
+listeners = []
+
+
+def _changed(title_id):
+    for listener in list(listeners):
+        try:
+            listener(title_id)
+        except Exception:
+            pass
+
+
 def _cheat_path(title_id, build_id):
     return os.path.join(CHEATS_DIR, title_id, f'{build_id}.txt')
 
@@ -80,6 +92,7 @@ def save_cheat(title_id, build_id, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'wb') as handle:
         handle.write(data)
+    _changed(title_id)
     return {
         'title_id': title_id,
         'build_id': build_id,
@@ -105,6 +118,7 @@ def delete_cheat(title_id, build_id):
     metadata = _load_metadata()
     metadata.pop(_metadata_key(title_id, build_id), None)
     _save_metadata(metadata)
+    _changed(title_id)
     return True
 
 
@@ -153,6 +167,7 @@ def set_cheat_note(title_id, build_id, note):
     else:
         metadata.pop(key, None)
     _save_metadata(metadata)
+    _changed(title_id)
     return note
 
 

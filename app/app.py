@@ -8379,6 +8379,7 @@ if __name__ == '__main__':
     use_flask_dev_server = str(os.environ.get('AEROFOIL_USE_FLASK_DEV') or os.environ.get('OWNFOIL_USE_FLASK_DEV') or '').strip().lower() in ('1', 'true', 'yes', 'on')
 
     discovery.reconcile(http_port=port)
+    lantern_native.advertise(port)
     try:
         if waitress_serve is not None and not use_flask_dev_server:
             wsgi_threads = _read_int_env('AEROFOIL_WSGI_THREADS', _read_int_env('OWNFOIL_WSGI_THREADS', 32, minimum=1, maximum=512), minimum=1, maximum=512)
@@ -8429,6 +8430,7 @@ if __name__ == '__main__':
         # Shutdown server
         logger.info('Shutting down server...')
         discovery.stop()
+        lantern_native.stop()
         try:
             watcher.stop()
             watcher_thread.join(timeout=5)
