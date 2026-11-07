@@ -115,6 +115,10 @@ class Files(db.Model):
     identification_error = db.Column(db.String)
     identification_attempts = db.Column(db.Integer, default=0)
     last_attempt = db.Column(db.DateTime, default=datetime.datetime.now())
+    # Lantern: SHA-256 of the file's content, valid for this size and modification time (see app/lantern_native/fingerprints.py)
+    sha256 = db.Column(db.String(64))
+    mtime_ns = db.Column(db.BigInteger)
+    hash_priority = db.Column(db.Integer, default=0, nullable=False, server_default='0')
 
     library = db.relationship('Libraries', backref=db.backref('files', lazy=True, cascade="all, delete-orphan"))
 
@@ -122,6 +126,7 @@ class Files(db.Model):
         db.Index('idx_files_library_id', 'library_id'),
         db.Index('idx_files_filename', 'filename'),
         db.Index('idx_files_identified', 'identified'),
+        db.Index('idx_files_sha256', 'sha256'),
     )
 
 class Titles(db.Model):

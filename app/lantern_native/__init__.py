@@ -23,6 +23,7 @@ ACCOUNTS_FILE = 'lantern-accounts.db'
 SECRETS_FILE = 'lantern-secrets.json'
 
 _instance = None
+_fingerprints = None
 
 
 def is_enabled(settings):
@@ -54,11 +55,11 @@ def build(settings, uid, config_dir=CONFIG_DIR, library=None):
     )
 
 
-def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None):
+def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None, start_worker=True):
     """Serves Lantern from `app` when it is turned on; returns the LanternApp or None.
 
     Reading the settings once, at start: turning it on or off takes a restart."""
-    global _instance
+    global _instance, _fingerprints
     try:
         if settings is None:
             from app.settings import load_settings
@@ -74,6 +75,11 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None):
             uid = discovery._server_uid()
         _instance = build(settings, uid, config_dir)
         serve(app, _instance)
+        if start_worker:
+            from app.lantern_native.fingerprints import Fingerprinter
+
+            _fingerprints = Fingerprinter(app)
+            _fingerprints.start()
         logger.info('Lantern is served at %s (uid %s).', BASE, _instance.uid)
         return _instance
     except Exception:
@@ -84,3 +90,19 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None):
 def instance():
     """The running LanternApp, or None when it is off."""
     return _instance
+
+
+def kick():
+    """Tells the fingerprint worker that the library changed (a no-op when Lantern is off)."""
+    if _fingerprints is not None:
+        _fingerprints.kick()
+
+
+def status():
+    """What the fingerprint worker is doing, for the admin pages; {'enabled': False} when Lantern is off."""
+    if _instance is None:
+        return {'enabled': False}
+    out = {'enabled': True, 'uid': _instance.uid}
+    if _fingerprints is not None:
+        out['fingerprints'] = _fingerprints.status()
+    return out

@@ -8309,6 +8309,13 @@ def _run_post_library_change():
 @debounce(10)
 def post_library_change():
     _run_post_library_change()
+    lantern_native.kick()
+
+@app.get('/api/lantern-native/status')
+@access_required('admin')
+def lantern_native_status_api():
+    return jsonify({'success': True, 'lantern': lantern_native.status()})
+
 
 @app.post('/api/library/scan')
 @access_required('admin')
