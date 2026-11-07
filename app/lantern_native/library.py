@@ -19,6 +19,8 @@ import threading
 from datetime import datetime, timezone
 
 from app.constants import APP_TYPE_BASE, APP_TYPE_DLC, APP_TYPE_UPD, CACHE_DIR
+from lantern.server.events import LibraryChange
+
 from app.db import Apps, Files, Titles, app_files, db
 
 logger = logging.getLogger(__name__)
@@ -185,11 +187,12 @@ class AeroFoilLibrary:
 
     families = frozenset({'library', 'titles', 'sections', 'cheats'})
 
-    def __init__(self, journal, announced, base='/api/lantern', on_change=None):
+    def __init__(self, journal, announced, base='/api/lantern', on_changes=None):
         self.base = base.rstrip('/')
         self._log = journal
         self._announced = announced
-        self._on_change = on_change
+        #: Called with the list of `LibraryChange` of each refresh and of each cheat change (the event `library`).
+        self.on_changes = on_changes
         self._lock = threading.RLock()
         self._apps = {}
         self._files = {}
@@ -285,8 +288,11 @@ class AeroFoilLibrary:
         stamp = _now()
         keep, apps, files = {}, {}, {}
         added = removed = 0
+        changes = []
         for app_id, (app, path) in current.items():
-            fingerprint = json.dumps(app.to_json(), sort_keys=True)
+            shown = app.to_json()
+            shown.pop('added', None)  # when it appeared is not a change of the app
+            fingerprint = json.dumps(shown, sort_keys=True)
             known = before.get(app_id)
             when = known[1] if known else stamp
             keep[app_id] = (fingerprint, when)
@@ -295,24 +301,33 @@ class AeroFoilLibrary:
             files['f_' + app.sha256[:16]] = FileRef(path, app.size, app.sha256)
             if known is None or known[0] != fingerprint:
                 self._log.record('added', app_id, PLATFORM)
+                changes.append(LibraryChange('apps', PLATFORM, app.title_id))
                 added += 1
         for app_id in before.keys() - current.keys():
             self._log.record('removed', app_id, PLATFORM)
+            changes.append(LibraryChange('apps', PLATFORM, None))
             removed += 1
         self._announced.put('app', keep)
-        titles, media, changed = self._refresh_titles(apps)
+        titles, media, changed = self._refresh_titles(apps, changes)
         sections = self._recent(apps)
         with self._lock:
             self._apps, self._files = apps, files
             self._titles, self._media, self._sections = titles, media, sections
-        if (added or removed or any(changed)) and self._on_change is not None:
-            try:
-                self._on_change(added + changed[0], removed + changed[1])
-            except Exception:
-                logger.exception('Lantern: a change listener failed.')
+        self._tell(changes)
         return added, removed
 
-    def _refresh_titles(self, apps):
+    def _tell(self, changes):
+        if changes and self.on_changes is not None:
+            try:
+                self.on_changes(changes)
+            except Exception:
+                logger.exception('Lantern: a change listener failed.')
+
+    def cheats_changed(self, title_id):
+        """A cheat file changed on AeroFoil's side (its Cheats page): the event `library`, family cheats."""
+        self._tell([LibraryChange('cheats', PLATFORM, title_id)])
+
+    def _refresh_titles(self, apps, changes):
         """A sheet for each title an app belongs to, the changes recorded; returns (titles, media, (changed, gone))."""
         wanted = sorted({app.title_id for app in apps.values()})
         icons, banners = _cached_names('icons'), _cached_names('banners')
@@ -329,10 +344,12 @@ class AeroFoilLibrary:
             keep[key] = (fingerprint, (before.get(key) or ('', _now()))[1])
             if key not in before or before[key][0] != fingerprint:
                 self._log.record('title', key, PLATFORM)
+                changes.append(LibraryChange('titles', PLATFORM, title_id))
                 changed += 1
         gone = 0
         for key in before.keys() - keep.keys():
             self._log.record('title', key, PLATFORM)
+            changes.append(LibraryChange('titles', PLATFORM, key.partition('/')[2]))
             gone += 1
         self._announced.put('title', keep)
         return titles, media, (changed, gone)

@@ -28,6 +28,7 @@ ANNOUNCED_FILE = 'lantern-announced.db'
 
 _instance = None
 _fingerprints = None
+_dnssd = None
 _refresh_latest_save = None
 
 
@@ -122,6 +123,11 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None, start_worker=T
             uid = discovery._server_uid()
         _instance = build(settings, uid, config_dir)
         serve(app, _instance)
+        # What changed in the library reaches the devices that are listening (SPEC.md § 18)
+        _instance.library.on_changes = _instance.library_changed
+        from app import cheats
+
+        cheats.listeners.append(_instance.library.cheats_changed)
         from app.lantern_native import accounts as mirror_accounts
         from app.lantern_native import web
 
@@ -155,6 +161,61 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None, start_worker=T
 def instance():
     """The running LanternApp, or None when it is off."""
     return _instance
+
+
+def _lan_address():
+    """The IPv4 address this machine has on its LAN (the route to a private address; nothing is sent)."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        try:
+            probe.connect(('192.0.2.1', 9))
+            return probe.getsockname()[0]
+        except OSError:
+            return None
+
+
+def advertise(port, settings=None):
+    """Announces the server on the LAN with DNS-SD (`_lantern._tcp`) when Lantern and LAN discovery are both on.
+
+    `port` is the web port; the shop setting for the advertised port wins (Docker, a proxy). Returns True when
+    it announced."""
+    global _dnssd
+    if _instance is None:
+        return False
+    try:
+        if settings is None:
+            from app.settings import load_settings
+
+            settings = load_settings()
+        shop = (settings or {}).get('shop') or {}
+        if shop.get('discovery_enabled') is not True or _dnssd is not None:
+            return False
+        address = _lan_address()
+        if address is None:
+            logger.warning('Lantern: no LAN address to announce.')
+            return False
+        from lantern.server.discovery import advertise_dnssd
+
+        _dnssd = advertise_dnssd(_instance, int(shop.get('discovery_http_port') or port), address)
+        logger.info('Lantern is announced on the LAN at %s (DNS-SD).', address)
+        return True
+    except Exception:
+        logger.exception('Lantern: the LAN announcement failed; AeroFoil carries on.')
+        return False
+
+
+def stop():
+    """Ends the announcement and the fingerprint worker (at shutdown)."""
+    global _dnssd
+    if _dnssd is not None:
+        try:
+            _dnssd.close()
+        except Exception:
+            pass
+        _dnssd = None
+    if _fingerprints is not None:
+        _fingerprints.stop()
 
 
 def kick():
