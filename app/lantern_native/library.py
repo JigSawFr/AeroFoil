@@ -10,6 +10,7 @@ A file is listed once it has a SHA-256 and is claimed by an app. An app's id is 
 several apps (a bundle) is one app, the base before an update before a DLC, and `includes` the others.
 """
 
+import dataclasses
 import hashlib
 import json
 import logging
@@ -29,6 +30,8 @@ PLATFORM = 'switch'
 TYPES = {APP_TYPE_BASE: 'base', APP_TYPE_UPD: 'update', APP_TYPE_DLC: 'dlc'}
 ORDER = {'base': 0, 'update': 1, 'dlc': 2}
 FORMATS = {'nsp', 'nsz', 'xci', 'xcz'}
+#: A compressed format and the plain one its decompressed variant is.
+VARIANTS = {'nsz': 'nsp', 'xcz': 'xci'}
 
 
 #: The titles database gives an age; Lantern reads a rating of a system (SPEC.md § 5.6). Each age is
@@ -64,7 +67,7 @@ def _name_of(title_id):
     return name[:200] if name and name != 'Unrecognized' else None
 
 
-def listing(base):
+def listing(base, virtual=None):
     """{app id: (App without `added`, filepath)} for what is listable now: read from the database."""
     from lantern._generated.models import App, AppIncludes
 
@@ -77,6 +80,7 @@ def listing(base):
         .order_by(Files.id, Apps.id)
         .all()
     )
+    virtual = virtual or {}
     by_file = {}
     for file, app_row, title in rows:
         by_file.setdefault(file.id, (file, []))[1].append((app_row, title))
@@ -96,23 +100,38 @@ def listing(base):
         includes = [
             AppIncludes(app_id=a.app_id, version_code=_version(a.app_version)) for a, _ in contents[1:16]
         ]
-        out[app_id] = (
-            App(
-                id=app_id,
-                platform=PLATFORM,
-                title_id=title.title_id,
-                app_id=main.app_id,
-                type=TYPES[main.app_type],
-                version_code=_version(main.app_version),
-                name=_name_of(title.title_id),
-                size=int(file.size),
-                format=extension,
-                includes=includes or None,
-                sha256=file.sha256,
-                file=f'{base}/v1/files/f_{file.sha256[:16]}',
-            ),
-            file.filepath,
+        compressed = extension in VARIANTS
+        app = App(
+            id=app_id,
+            platform=PLATFORM,
+            title_id=title.title_id,
+            app_id=main.app_id,
+            type=TYPES[main.app_type],
+            version_code=_version(main.app_version),
+            name=_name_of(title.title_id),
+            size=int(file.size),
+            format=extension,
+            # Reading a compressed package needs the console to support it (Annex A)
+            requires=['fs-compression'] if compressed else None,
+            includes=includes or None,
+            sha256=file.sha256,
+            file=f'{base}/v1/files/f_{file.sha256[:16]}',
         )
+        out[app_id] = (app, file.filepath)
+        made = virtual.get(file.filepath)
+        if compressed and made is not None and made[:2] == (file.size, file.mtime_ns):
+            # The same game, decompressed on the fly, as the plain package: a variant (Annex B.15)
+            _, _, vsha, vsize = made
+            variant = dataclasses.replace(
+                app,
+                id='a_' + vsha[:12],
+                size=int(vsize),
+                format=VARIANTS[extension],
+                requires=None,
+                sha256=vsha,
+                file=f'{base}/v1/files/f_{vsha[:16]}',
+            )
+            out[variant.id] = (variant, file.filepath, True)
     return out
 
 
@@ -187,8 +206,15 @@ class AeroFoilLibrary:
 
     families = frozenset({'library', 'titles', 'sections', 'cheats'})
 
-    def __init__(self, journal, announced, base='/api/lantern', on_changes=None):
+    def __init__(self, journal, announced, base='/api/lantern', on_changes=None, virtual=None, chunk_dir=None):
+        """`virtual`: the VirtualStore of decompressed variants (none: no variant); `chunk_dir`: where the chunk
+        indexes of the small files are kept, for differential updates (none: no `deltas`)."""
         self.base = base.rstrip('/')
+        self.virtual = virtual
+        self.chunk_dir = chunk_dir
+        if chunk_dir:
+            self.families = self.families | {'deltas'}
+        self._indexes = {}
         self._log = journal
         self._announced = announced
         #: Called with the list of `LibraryChange` of each refresh and of each cheat change (the event `library`).
@@ -283,13 +309,22 @@ class AeroFoilLibrary:
         remembers it. Call inside an app context. Returns (added, removed)."""
         from lantern.server.files import FileRef
 
-        current = listing(self.base) if rows is None else rows
+        current = listing(self.base, self.virtual.all() if self.virtual is not None else None) if rows is None else rows
         before = self._announced.get('app')
         stamp = _now()
         keep, apps, files = {}, {}, {}
         added = removed = 0
         changes = []
-        for app_id, (app, path) in current.items():
+        for app_id, entry in current.items():
+            app, path = entry[0], entry[1]
+            streamed = len(entry) > 2 and entry[2]
+            if streamed:
+                from app.lantern_native.variants import reader
+
+                ref = FileRef('', app.size, app.sha256, read=reader(path))
+            else:
+                ref = FileRef(path, app.size, app.sha256)
+                self._chunks(app, ref)
             shown = app.to_json()
             shown.pop('added', None)  # when it appeared is not a change of the app
             fingerprint = json.dumps(shown, sort_keys=True)
@@ -298,7 +333,7 @@ class AeroFoilLibrary:
             keep[app_id] = (fingerprint, when)
             app.added = when
             apps[app_id] = app
-            files['f_' + app.sha256[:16]] = FileRef(path, app.size, app.sha256)
+            files['f_' + app.sha256[:16]] = ref
             if known is None or known[0] != fingerprint:
                 self._log.record('added', app_id, PLATFORM)
                 changes.append(LibraryChange('apps', PLATFORM, app.title_id))
@@ -315,6 +350,36 @@ class AeroFoilLibrary:
             self._titles, self._media, self._sections = titles, media, sections
         self._tell(changes)
         return added, removed
+
+    def _chunks(self, app, ref):
+        """The chunk index of a small file (SPEC.md § 22): what lets a device fetch only the pieces of an update it
+        lacks. Cut once per SHA-256 and kept on disk; a big file has none (cutting is too slow for it)."""
+        from lantern import chunks as cdc
+        from lantern._generated.models import ChunksRef
+        from lantern.server.library import DELTAS_MAX, DELTAS_MIN, cut_before
+
+        if not self.chunk_dir or not DELTAS_MIN <= ref.size <= DELTAS_MAX or cdc.size_for(ref.size) is None:
+            return
+        raw = self._indexes.get(ref.sha256)
+        cached = os.path.join(self.chunk_dir, ref.sha256 + '.idx')
+        if raw is None:
+            try:
+                with open(cached, 'rb') as handle:
+                    raw = handle.read()
+            except OSError:
+                try:
+                    raw = cut_before(ref)
+                except (OSError, ValueError) as error:
+                    logger.warning('Lantern: no chunk index for %s (%s).', ref.path, error)
+                    return
+                os.makedirs(self.chunk_dir, exist_ok=True)
+                with open(cached, 'wb') as handle:
+                    handle.write(raw)
+            self._indexes[ref.sha256] = raw
+        app.chunks = ChunksRef.from_json(cdc.ref(f'{self.base}/v1/chunks/sha256/{ref.sha256}', raw))
+
+    def chunk_index(self, sha256):
+        return self._indexes.get(sha256)
 
     def _tell(self, changes):
         if changes and self.on_changes is not None:

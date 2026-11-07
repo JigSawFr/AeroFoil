@@ -67,10 +67,17 @@ def build(settings, uid, config_dir=CONFIG_DIR, library=None):
     if library is None:
         from app.lantern_native.library import Announced, AeroFoilLibrary
 
+        from app.lantern_native.variants import VirtualStore
+
         library = AeroFoilLibrary(
             SqliteJournal(os.path.join(config_dir, JOURNAL_FILE)),
             Announced(os.path.join(config_dir, ANNOUNCED_FILE)),
             BASE,
+            # The decompressed form of .nsz/.xcz, hashed in the background (the setting can turn it off)
+            virtual=VirtualStore(os.path.join(config_dir, 'lantern-variants.db'))
+            if shop.get('lantern_variants', True)
+            else None,
+            chunk_dir=os.path.join(config_dir, 'lantern-chunks'),
         )
     from app.lantern_native.accounts import make_accounts
     from app.lantern_native.requests import AeroFoilRequests
@@ -151,7 +158,14 @@ def init_app(app, settings=None, config_dir=CONFIG_DIR, uid=None, start_worker=T
         if start_worker:
             from app.lantern_native.fingerprints import Fingerprinter
 
-            _fingerprints = Fingerprinter(app, on_pass=lambda done: _instance.library.refresh())
+            from app.lantern_native.variants import VariantBuilder
+
+            library = _instance.library
+            _fingerprints = Fingerprinter(
+                app,
+                on_pass=lambda done: library.refresh(),
+                variants=VariantBuilder(library.virtual) if library.virtual is not None else None,
+            )
             _fingerprints.start()
         logger.info('Lantern is served at %s (uid %s).', BASE, _instance.uid)
         return _instance

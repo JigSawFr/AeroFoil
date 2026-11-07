@@ -747,6 +747,11 @@
                                     <input type="checkbox" class="form-check-input" id="lanternHstsCheck">
                                     <label class="form-check-label" for="lanternHstsCheck">Send HTTP Strict Transport Security</label>
                                 </div>
+                                <div class="form-check mt-2">
+                                    <input type="checkbox" class="form-check-input" id="lanternVariantsCheck">
+                                    <label class="form-check-label" for="lanternVariantsCheck">Offer decompressed NSP/XCI of NSZ/XCZ files</label>
+                                </div>
+                                <div class="form-text">Lets consoles that cannot read compressed packages install them. Each file is decompressed once in the background, to hash it, which takes CPU time on a large library.</div>
                                 <label for="lanternSpkiInput" class="form-label mt-2">Key fingerprint (SHA-256, optional)</label>
                                 <input class="form-control" id="lanternSpkiInput" maxlength="64" placeholder="64 hex digits" spellcheck="false">
                                 <div class="form-text">The SHA-256 of your TLS certificate's public key, shown to people when they approve a device. Leave empty with a certificate from a public authority.</div>
@@ -2015,6 +2020,7 @@
             lantern_enabled: getCheckboxStatus("lanternEnabledCheck"),
             lantern_scheme: getCheckboxStatus("lanternSchemeCheck") ? "https" : "",
             lantern_hsts: getCheckboxStatus("lanternHstsCheck"),
+            lantern_variants: getCheckboxStatus("lanternVariantsCheck"),
             lantern_spki: getInputVal("lanternSpkiInput"),
             discovery_enabled: getCheckboxStatus("discoveryEnabledCheck"),
             discovery_name: getInputVal("discoveryNameInput"),
@@ -3170,6 +3176,7 @@
             $("#lanternEnabledCheck").prop("checked", shopSettings.lantern_enabled === true);
             $("#lanternSchemeCheck").prop("checked", shopSettings.lantern_scheme === "https");
             $("#lanternHstsCheck").prop("checked", shopSettings.lantern_hsts === true);
+            $("#lanternVariantsCheck").prop("checked", shopSettings.lantern_variants !== false);
             setInputVal("lanternSpkiInput", shopSettings.lantern_spki || "");
             $("#discoveryEnabledCheck").prop("checked", shopSettings.discovery_enabled === true);
             setInputVal("discoveryNameInput", shopSettings.discovery_name || "AeroFoil");

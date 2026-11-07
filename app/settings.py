@@ -530,6 +530,7 @@ def _normalize_shop_settings(raw_shop):
 
     merged['lantern_enabled'] = _coerce_bool(merged.get('lantern_enabled'), default=False)
     merged['lantern_hsts'] = _coerce_bool(merged.get('lantern_hsts'), default=False)
+    merged['lantern_variants'] = _coerce_bool(merged.get('lantern_variants'), default=True)
     merged['lantern_scheme'] = 'https' if str(merged.get('lantern_scheme') or '').strip().lower() == 'https' else ''
     spki = str(merged.get('lantern_spki') or '').strip().lower()
     merged['lantern_spki'] = spki if re.fullmatch(r'[0-9a-f]{64}', spki) else ''

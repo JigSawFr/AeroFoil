@@ -164,8 +164,9 @@ class Fingerprinter:
     """The background worker: refreshes the validators, hashes what is pending, checks a sample. Woken by
     `kick()` (the library changed) and by a timer."""
 
-    def __init__(self, app, store=None, on_hashed=None, on_pass=None):
+    def __init__(self, app, store=None, on_hashed=None, on_pass=None, variants=None):
         self.app = app
+        self.variants = variants
         self.on_pass = on_pass
         self.store = store or FilesStore()
         self.on_hashed = on_hashed
@@ -233,6 +234,14 @@ class Fingerprinter:
             done += count
         self._set(state='idle', **self._counts())
         self._pass(done)
+        if self.variants is not None and not self._stop.is_set():
+            # After everything is listed: decompress the .nsz/.xcz once each, to hash their plain form
+            self._set(state='variants', **self._counts())
+            made = self.variants.run(self._stop.is_set)
+            if made:
+                self._pass(made)
+                done += made
+        self._set(state='idle', **self._counts())
         if done:
             logger.info('Lantern: hashed %d file(s).', done)
             if self.on_hashed is not None:
@@ -245,7 +254,9 @@ class Fingerprinter:
 
     def _counts(self):
         counts = self.store.counts()
+        extra = {'variants': self.variants.counts()} if self.variants is not None else {}
         return {
+            **extra,
             'hashed': counts['hashed'],
             'pending': counts['pending'],
             'pending_bytes': self.store.pending_bytes(),
