@@ -8,7 +8,7 @@ protected by a token from the user's session, so another site cannot approve a d
 import html
 import secrets
 
-from flask import Blueprint, jsonify, redirect, request, session, url_for
+from flask import Blueprint, jsonify, request, session, url_for
 from flask_login import current_user, login_required
 
 from app.lantern_native import PAIR_PATH
@@ -72,7 +72,14 @@ def blueprint_for(lantern, mirror):
     @blueprint.route(PAIR_PATH, methods=['GET', 'POST'])
     def pair():
         if not current_user.is_authenticated:
-            return redirect(url_for('auth.login', next=request.full_path.rstrip('?')))
+            # Never a redirect (SPEC.md § 2.4): the page the device opened says what to do, and approves nothing
+            code = html.escape((request.values.get('code') or '').strip()[:64])
+            login = html.escape(url_for('auth.login', next=request.full_path.rstrip('?')))
+            shown = f'<p>Code <code>{code}</code>.</p>' if code else ''
+            return _page(
+                f'{shown}<p>Sign in to AeroFoil to approve this device. Nothing is approved by opening this page.</p>'
+                f'<p><a href="{login}">Sign in</a></p>'
+            )
         if not current_user.has_shop_access():
             return _page('<p>Your account cannot use Lantern.</p>', 403)
         code = (request.values.get('code') or '').strip()[:64]
